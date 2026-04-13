@@ -111,6 +111,30 @@ h1{
 .tag-pvp{background:#2a0a1a;color:#f472b6}
 .tag-raid{background:#2a1a4a;color:#c084fc}
 
+/* カウントダウンバナー */
+.cd-banner{
+  display:flex;align-items:center;gap:8px;
+  border-radius:12px;padding:10px 14px;
+  margin-bottom:1rem;font-size:13px;font-weight:500;
+}
+.cd-banner.daily{
+  background:linear-gradient(135deg,#0a1a2a,#0d1020);
+  border:1px solid #1a2a5a;color:#818cf8;
+}
+.cd-banner.weekly{
+  background:linear-gradient(135deg,#1a0a2a,#150a1e);
+  border:1px solid #4a2a7a;color:#c084fc;
+}
+.cd-banner.urgent{
+  background:linear-gradient(135deg,#2a0a1a,#1e0a14);
+  border:1px solid #be185d;color:#f9a8d4;
+}
+.cd-label{font-size:11px;letter-spacing:0.05em;opacity:0.7}
+.cd-time{
+  margin-left:auto;font-size:16px;font-weight:700;
+  font-variant-numeric:tabular-nums;white-space:nowrap;letter-spacing:0.03em;
+}
+
 /* リセットボタン */
 .reset-btn{
   font-size:12px;padding:5px 14px;border-radius:10px;
@@ -184,6 +208,12 @@ h1{
     <button class="tab" onclick="switchTab('monthly',this)">マンスリー・不定期</button>
   </div>
 
+  <div id="cd-banner" class="cd-banner daily" style="display:none">
+    <span id="cd-icon">&#x23F0;</span>
+    <span id="cd-label" class="cd-label"></span>
+    <span id="cd-time" class="cd-time"></span>
+  </div>
+
   <div class="progress-wrap">
     <div class="progress-label">
       <span id="prog-label">進捗</span>
@@ -252,7 +282,7 @@ function render(){
 
 function toggle(k){state[k]=!state[k];save();render();}
 function toggleSection(tab,si){var k=tab+"_"+si;collapsed[k]=collapsed[k]===false?true:false;render();}
-function switchTab(tab,btn){currentTab=tab;document.querySelectorAll(".tab").forEach(function(t){t.classList.remove("active");});btn.classList.add("active");render();}
+function switchTab(tab,btn){currentTab=tab;document.querySelectorAll(".tab").forEach(function(t){t.classList.remove("active");});btn.classList.add("active");render();startCdTimer();}
 function resetTab(){var label=currentTab==="daily"?"デイリー":currentTab==="weekly"?"ウィークリー":"マンスリー・不定期";if(!confirm(label+"のチェックをリセットしますか？"))return;DATA[currentTab].forEach(function(s,si){s.tasks.forEach(function(t,ti){delete state[ck(currentTab,si,ti)];});});save();render();}
 function openSettings(){renderSettings();document.getElementById("overlay").classList.add("open");}
 function closeSettings(){save();document.getElementById("overlay").classList.remove("open");render();}
@@ -280,7 +310,70 @@ function renderSettings(){
   document.getElementById("settings-body").innerHTML=html;
 }
 function toggleDisabled(k){disabled[k]=(disabled[k]===true)?false:true;save();}
-load();render();
+// --- カウントダウン ---
+function jstNow(){return new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Tokyo"}));}
+
+function secsUntilDaily(){
+  var now=jstNow();
+  var next=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,0);
+  return Math.floor((next-now)/1000);
+}
+
+function secsUntilWeekly(){
+  var now=jstNow();
+  // 次の火曜17:00を求める
+  var day=now.getDay(); // 0=日 2=火
+  var daysUntilTue=(2-day+7)%7;
+  // 今日が火曜かつまだ17:00前なら今日
+  if(day===2 && now.getHours()<17) daysUntilTue=0;
+  // 今日が火曜で17:00以降なら次の火曜
+  else if(day===2 && now.getHours()>=17) daysUntilTue=7;
+  var next=new Date(now.getFullYear(),now.getMonth(),now.getDate()+daysUntilTue,17,0,0);
+  return Math.floor((next-now)/1000);
+}
+
+function fmtTime(secs){
+  var h=Math.floor(secs/3600);
+  var m=Math.floor((secs%3600)/60);
+  var s=secs%60;
+  if(h>0) return h+"時間"+String(m).padStart(2,"0")+"分";
+  if(m>0) return m+"分"+String(s).padStart(2,"0")+"秒";
+  return s+"秒";
+}
+
+function updateBanner(){
+  var banner=document.getElementById("cd-banner");
+  var labelEl=document.getElementById("cd-label");
+  var timeEl=document.getElementById("cd-time");
+
+  if(currentTab==="monthly"){
+    banner.style.display="none";
+    return;
+  }
+
+  banner.style.display="flex";
+
+  if(currentTab==="daily"){
+    var secs=secsUntilDaily();
+    labelEl.textContent="デイリーリセットまで";
+    timeEl.textContent=fmtTime(secs);
+    banner.className="cd-banner "+(secs<3600?"urgent":"daily");
+  } else if(currentTab==="weekly"){
+    var secs=secsUntilWeekly();
+    labelEl.textContent="ウィークリーリセットまで（火曜17:00）";
+    timeEl.textContent=fmtTime(secs);
+    banner.className="cd-banner "+(secs<3600?"urgent":"weekly");
+  }
+}
+
+var cdTimer=null;
+function startCdTimer(){
+  if(cdTimer) clearInterval(cdTimer);
+  updateBanner();
+  cdTimer=setInterval(function(){updateBanner();},1000);
+}
+
+load();render();startCdTimer();
 </script>
 </body>
 </html>
